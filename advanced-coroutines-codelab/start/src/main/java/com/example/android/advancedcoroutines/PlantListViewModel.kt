@@ -25,6 +25,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
@@ -94,16 +95,14 @@ class PlantListViewModel internal constructor(
     init {
         // When creating a new ViewModel, clear the grow zone and perform any related udpates
         clearGrowZoneNumber()
-        growZoneFlow.mapLatest { growZone ->
-            _spinner.value = true
+
+        loadDataFor(growZoneFlow) { growZone ->
             if (growZone == NoGrowZone) {
                 plantRepository.tryUpdateRecentPlantsCache()
             } else {
                 plantRepository.tryUpdateRecentPlantsForGrowZoneCache(growZone)
             }
-        }.onEach { _spinner.value = false }
-            .catch { throwable: Throwable -> _snackbar.value = throwable.message }
-            .launchIn(viewModelScope)
+        }
         //use when livedata
 //        launchDataLoad { plantRepository.tryUpdateRecentPlantsCache() }
     }
@@ -170,5 +169,15 @@ class PlantListViewModel internal constructor(
                 _spinner.value = false
             }
         }
+    }
+
+    private fun <GrowZone> loadDataFor(source: StateFlow<GrowZone>, block: suspend (GrowZone) -> Unit) {
+        source.mapLatest { growZone ->
+            _spinner.value = true
+            block(growZone)
+        }
+            .onEach { _spinner.value = false }
+            .catch { throwable: Throwable -> _snackbar.value = throwable.message }
+            .launchIn(viewModelScope)
     }
 }
